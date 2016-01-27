@@ -3,6 +3,7 @@ from django.shortcuts import render_to_response
 from django.template import RequestContext
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 
 import datetime
 import json
@@ -73,8 +74,10 @@ def signup(request):
             u.is_staff = True
             u.is_active = True
             u.save()
+            u = authenticate(username=username, password = password)
+            u.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, u)
-            return HttpResponse(u.username)
+            return HttpResponseRedirect("/")
     else:
         return render_to_response("signup.html",{}, context_instance = RequestContext(request))
 
