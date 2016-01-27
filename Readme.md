@@ -4,8 +4,7 @@
 
 This project is aimed to be used as a web backend for tweeting on twitter from a website.
 
-## Requirements :
-
+This project is based on Twython : Twitter Python API
 
  
 
