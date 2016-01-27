@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+{{message}}
+    <form action="/oauth_finder/" method="post" enctype="multipart/form-data">
+        {%csrf_token%}
+        <input type="text" name="tweet" id="" value="" />
+        <input type="file" name="video_file" id="" value="" />
+        <input type = "submit" value = "submit">
+        
+    </form>
+</body>
+</html>
