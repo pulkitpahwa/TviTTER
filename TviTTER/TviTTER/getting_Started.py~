@@ -80,12 +80,13 @@ class VideoMixin(object) :
     def upload_video(self, media, media_type, size=None, chunk_size=512*1024):
     
         """Uploads video file to Twitter servers in chunks. 
-        The video is uploaded in chunks of  chunk_size. chunk_size can be provide as parameter. By default, chunk_size is 512KN
+        The video is uploaded in chunks of  chunk_size. chunk_size can be provide as parameter. 
+        By default, chunk_size is 512KB
 
         * The upload starts with INIT, segment_index = 0, it returns media_id of the upload in progress
-        * for every segment that we send next, we send command : APPEND, media_id = media_id (that was returned 
+        * For every segment that we send next, we send command : APPEND, media_id = media_id (that was returned 
           in the previous step), segment_index = increase this by one on every step
-        * continue step 2 till there is data to be sent to the server (Twitter)
+        * Continue step 2 till there is data to be sent to the server (Twitter)
         * complete the upload by sending the command "FINALIZE" and the media_id
 
         """
@@ -187,7 +188,7 @@ class TviTTER(VideoMixin, StatusMixin, object):
                 auth_endpoint: (optional) Lets you select which authentication endpoint will use your application.
                 Default: authenticate.
         """
-
+        print "init"
         # API urls, OAuth urls and API version; needed for hitting that there
         # API.
         self.api_version = api_version
@@ -223,15 +224,9 @@ class TviTTER(VideoMixin, StatusMixin, object):
             # it for them
             self.client_args['headers'].update(default_headers)
 
-        # Generate OAuth authentication object for the request
-        # If no keys/tokens are passed to __init__, auth=None allows for
-        # unauthenticated requests, although I think all v1.1 requests
-        # need auth
         auth = None
-        print "oauth_version = ", oauth_version
         if oauth_version == 1:
             # User Authentication is through OAuth 1
-            print "oauth_version = ", oauth_version
             if self.app_key is not None and self.app_secret is not None:
                 auth = OAuth1(self.app_key, self.app_secret,
                                 self.oauth_token, self.oauth_token_secret)
@@ -260,10 +255,136 @@ class TviTTER(VideoMixin, StatusMixin, object):
 
         self._last_call = None
 
-#    def __repr__(self):
-#        return '<Twython: %s>' % (self.app_key)
+    def get_authentication_tokens(self, callback_url=None, force_login=False,
+                                  screen_name=''):
+        """Returns a dict including an authorization URL, ``auth_url``, to
+           direct a user to
+
+        :param callback_url: (optional) Url the user is returned to after
+                             they authorize your app (web clients only)
+        :param force_login: (optional) Forces the user to enter their
+                            credentials to ensure the correct users
+                            account is authorized.
+        :param screen_name: (optional) If forced_login is set OR user is
+                            not currently logged in, Prefills the username
+                            input box of the OAuth login screen with the
+                            given value
+
+        :rtype: dict
+        """
+        print "get_authentication_tokens"
+        if self.oauth_version != 1:
+            raise Exception('This method can only be called when your \
+                               OAuth version is 1.0.')
+
+        request_args = {}
+        if callback_url:
+            request_args['oauth_callback'] = callback_url
+        response = self.client.get(self.request_token_url, params=request_args)
+
+        if response.status_code == 401:
+            raise Exception( str(response.content) + str(response.status_code))
+        elif response.status_code != 200:
+            raise TviTTERError(response.content,
+                               error_code=response.status_code)
+
+        request_tokens = dict(parse_qsl(response.content.decode('utf-8')))
+        if not request_tokens:
+            raise Exception('Unable to decode request tokens.')
+
+        oauth_callback_confirmed = request_tokens.get('oauth_callback_confirmed') \
+            == 'true'
+
+        auth_url_params = {
+            'oauth_token': request_tokens['oauth_token'],
+        }
+
+        if force_login:
+            auth_url_params.update({
+                'force_login': force_login,
+                'screen_name': screen_name
+            })
+
+        # Use old-style callback argument if server didn't accept new-style
+        if callback_url and not oauth_callback_confirmed:
+            auth_url_params['oauth_callback'] = self.callback_url
+
+        request_tokens['auth_url'] = self.authenticate_url + \
+            '?' + urlencode(auth_url_params)
+
+        return request_tokens
+
+    def get_authorized_tokens(self, oauth_verifier):
+        """Returns a dict of authorized tokens after they go through the
+        :class:`get_authentication_tokens` phase.
+
+        :param oauth_verifier: (required) The oauth_verifier (or a.k.a PIN
+        for non web apps) retrieved from the callback url querystring
+        :rtype: dict
+
+        """
+        print "get_authorized_tokens"
+        if self.oauth_version != 1:
+            raise Exception('This method can only be called when your \
+                               OAuth version is 1.0.')
+
+        response = self.client.get(self.access_token_url,
+                                   params={'oauth_verifier': oauth_verifier},
+                                   headers={'Content-Type': 'application/\
+                                   json'})
+
+        if response.status_code == 401:
+            try:
+                try:
+                    # try to get json
+                    content = response.json()
+                except AttributeError:  # pragma: no cover
+                    # if unicode detected
+                    content = json.loads(response.content)
+            except ValueError:
+                content = {}
+            message = "error_code="  + str(response.status_code)
+            raise Exception(message)
+        authorized_tokens = dict(parse_qsl(response.content.decode('utf-8')))
+        if not authorized_tokens:
+            raise Exception('Unable to decode authorized tokens.')
+
+        return authorized_tokens  # pragma: no cover
+
+    def obtain_access_token(self):
+        """Returns an OAuth 2 access token to make OAuth 2 authenticated
+        read-only calls.
+
+        :rtype: string
+        """
+        print "obtain_access_token"
+        if self.oauth_version != 2:
+            raise Exception('This method can only be called when your \
+                               OAuth version is 2.0.')
+
+        data = {'grant_type': 'client_credentials'}
+        basic_auth = HTTPBasicAuth(self.app_key, self.app_secret)
+        try:
+            response = self.client.post(self.request_token_url,
+                                        data=data, auth=basic_auth)
+                                        
+            content = response.content.decode('utf-8')
+            try:
+                content = content.json()
+            except AttributeError:
+                content = json.loads(content)
+                access_token = content['access_token']
+        except (KeyError, ValueError, requests.exceptions.RequestException):
+            raise Exception('Unable to obtain OAuth 2 access token.')
+        else:
+            return access_token
+
+        
+        
+
 
     def _request(self, url, method='GET', params=None, api_call=None):
+
         """Internal request method"""
         method = method.lower()
         params = params or {}
@@ -279,7 +400,9 @@ class TviTTER(VideoMixin, StatusMixin, object):
 
         if method == 'get':
             requests_args['params'] = params
+
         else:
+            #this is what we are going to use in TviTTER
             requests_args.update({
                 'data': params,
                 'files': files,
@@ -334,7 +457,7 @@ class TviTTER(VideoMixin, StatusMixin, object):
 
     def _get_error_message(self, response):
         """Parse and return the first error message"""
-
+        print "_get_error_message"
         error_message = 'An error occurred processing your request.'
         try:
             content = response.json()
@@ -371,7 +494,7 @@ class TviTTER(VideoMixin, StatusMixin, object):
 
         :rtype: dict
         """
-
+        print "request"
         if endpoint.startswith('http://'):
             raise Exception('api.twitter.com is restricted to SSL/TLS traffic.')
 
@@ -380,7 +503,6 @@ class TviTTER(VideoMixin, StatusMixin, object):
         if endpoint.startswith('https://'):
             url = endpoint
         else:
-            """This is used when we are using the api via command line"""
             url = '%s/%s.json' % (self.api_url % version, endpoint)
 
         content = self._request(url, method=method, params=params,
@@ -388,202 +510,9 @@ class TviTTER(VideoMixin, StatusMixin, object):
 
         return content
 
-    def get(self, endpoint, params=None, version='1.1'):
-        """Shortcut for GET requests via :class:`request`"""
-        return self.request(endpoint, params=params, version=version)
-
     def post(self, endpoint, params=None, version='1.1'):
         """Shortcut for POST requests via :class:`request`"""
-        #Mosty the params would be status
+        print "post"        
+        #Mosty the params would be status or media
         return self.request(endpoint, 'POST', params=params, version=version)
 
-    def get_lastfunction_header(self, header, default_return_value=None):
-        """Returns a specific header from the last API call
-        This will return None if the header is not present
-
-        :param header: (required) The name of the header you want to get
-                       the value of
-
-        Most useful for the following header information:
-            x-rate-limit-limit,
-            x-rate-limit-remaining,
-            x-rate-limit-class,
-            x-rate-limit-reset
-
-        """
-        if self._last_call is None:
-            raise Exception('This function must be called after an API call. \
-                               It delivers header information.')
-
-        return self._last_call['headers'].get(header, default_return_value)
-
-    def get_authentication_tokens(self, callback_url=None, force_login=False,
-                                  screen_name=''):
-        """Returns a dict including an authorization URL, ``auth_url``, to
-           direct a user to
-
-        :param callback_url: (optional) Url the user is returned to after
-                             they authorize your app (web clients only)
-        :param force_login: (optional) Forces the user to enter their
-                            credentials to ensure the correct users
-                            account is authorized.
-        :param screen_name: (optional) If forced_login is set OR user is
-                            not currently logged in, Prefills the username
-                            input box of the OAuth login screen with the
-                            given value
-
-        :rtype: dict
-        """
-        if self.oauth_version != 1:
-            raise Exception('This method can only be called when your \
-                               OAuth version is 1.0.')
-
-        request_args = {}
-        if callback_url:
-            request_args['oauth_callback'] = callback_url
-        response = self.client.get(self.request_token_url, params=request_args)
-
-        if response.status_code == 401:
-            raise Exception( str(response.content) + str(response.status_code))
-        elif response.status_code != 200:
-            raise TviTTERException(response.content,
-                               error_code=response.status_code)
-
-        request_tokens = dict(parse_qsl(response.content.decode('utf-8')))
-        if not request_tokens:
-            raise Exception('Unable to decode request tokens.')
-
-        oauth_callback_confirmed = request_tokens.get('oauth_callback_confirmed') \
-            == 'true'
-
-        auth_url_params = {
-            'oauth_token': request_tokens['oauth_token'],
-        }
-
-        if force_login:
-            auth_url_params.update({
-                'force_login': force_login,
-                'screen_name': screen_name
-            })
-
-        # Use old-style callback argument if server didn't accept new-style
-        if callback_url and not oauth_callback_confirmed:
-            auth_url_params['oauth_callback'] = self.callback_url
-
-        request_tokens['auth_url'] = self.authenticate_url + \
-            '?' + urlencode(auth_url_params)
-
-        return request_tokens
-
-    def get_authorized_tokens(self, oauth_verifier):
-        """Returns a dict of authorized tokens after they go through the
-        :class:`get_authentication_tokens` phase.
-
-        :param oauth_verifier: (required) The oauth_verifier (or a.k.a PIN
-        for non web apps) retrieved from the callback url querystring
-        :rtype: dict
-
-        """
-        if self.oauth_version != 1:
-            raise Exception('This method can only be called when your \
-                               OAuth version is 1.0.')
-
-        response = self.client.get(self.access_token_url,
-                                   params={'oauth_verifier': oauth_verifier},
-                                   headers={'Content-Type': 'application/\
-                                   json'})
-
-        if response.status_code == 401:
-            try:
-                try:
-                    # try to get json
-                    content = response.json()
-                except AttributeError:  # pragma: no cover
-                    # if unicode detected
-                    content = json.loads(response.content)
-            except ValueError:
-                content = {}
-            message = "error_code="  + str(response.status_code)
-            raise Exception(message)
-        authorized_tokens = dict(parse_qsl(response.content.decode('utf-8')))
-        if not authorized_tokens:
-            raise Exception('Unable to decode authorized tokens.')
-
-        return authorized_tokens  # pragma: no cover
-
-    def obtain_access_token(self):
-        """Returns an OAuth 2 access token to make OAuth 2 authenticated
-        read-only calls.
-
-        :rtype: string
-        """
-        if self.oauth_version != 2:
-            raise Exception('This method can only be called when your \
-                               OAuth version is 2.0.')
-
-        data = {'grant_type': 'client_credentials'}
-        basic_auth = HTTPBasicAuth(self.app_key, self.app_secret)
-        try:
-            response = self.client.post(self.request_token_url,
-                                        data=data, auth=basic_auth)
-                                        
-            content = response.content.decode('utf-8')
-            try:
-                content = content.json()
-            except AttributeError:
-                content = json.loads(content)
-                access_token = content['access_token']
-        except (KeyError, ValueError, requests.exceptions.RequestException):
-            raise Exception('Unable to obtain OAuth 2 access token.')
-        else:
-            return access_token
-
-    @staticmethod
-    def construct_api_url(api_url, **params):
-        """Construct a Twitter API url, encoded, with parameters
-
-        :param api_url: URL of the Twitter API endpoint you are attempting
-        to construct
-        :param \*\*params: Parameters that are accepted by Twitter for the
-        endpoint you're requesting
-        :rtype: string
-
-        Usage::
-
-          >>> from twython import Twython
-          >>> twitter = Twython()
-
-          >>> api_url = 'https://api.twitter.com/1.1/search/tweets.json'
-          >>> constructed_url = twitter.construct_api_url(api_url, q='python',
-          result_type='popular')
-          >>> print constructed_url
-          https://api.twitter.com/1.1/search/tweets.json?q=python&result_type=popular
-
-        """
-        querystring = []
-        params, _ = _transparent_params(params or {})
-        params = requests.utils.to_key_val_list(params)
-        for (k, v) in params:
-            querystring.append(
-                '%s=%s' % (Twython.encode(k), quote_plus(Twython.encode(v)))
-            )
-        return '%s?%s' % (api_url, '&'.join(querystring))
-
-
-    @staticmethod
-    def unicode2utf8(text):
-        try:
-            if is_py2 and isinstance(text, unicode):
-                text = text.encode('utf-8')
-        except:
-            pass
-        return text
-
-    @staticmethod
-    def encode(text):
-        if is_py2 and isinstance(text, (unicode)):
-            return Twython.unicode2utf8(text)
-        return unicode(text)
-
-        
-        

@@ -29,9 +29,11 @@ DEBUG = True
 
 #APP_KEY = "vUmkZ3x2jUNR33ptpeiPCVJa2"
 #APP_SECRET = "U2i0Ah0sXyBVw2jeGpTqg3faPC9Co0uSnUOiwSmQ4Z9l8j56na"
-
-APP_KEY = "ZegX82aTQ8Snjs7abtAlvVhS7"
-APP_SECRET = "7Uh09HwzgKWFa4XeJNpmTELgmey9kGP073FAawpIIc8cWZmlN7"
+try :
+    from app_key import APP_KEY, APP_SECRET
+except : 
+    APP_KEY = ""
+    APP_SECRET = ""
 
 ALLOWED_HOSTS = []
 

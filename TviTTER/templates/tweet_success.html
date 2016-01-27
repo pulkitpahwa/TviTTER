@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title></title>
+    <title>Success</title>
 </head>
 <body>
-    <h1>TviTTER</h1>
+{{message}}
     <form action="/upload_video/" method="post" enctype="multipart/form-data">
         {%csrf_token%}
         <input type="text" name="tweet" id="" value="" />
@@ -13,7 +13,5 @@
         <input type = "submit" value = "submit">
         
     </form>
-    <br/><br/>
-    <a href = "/">Home</a>
 </body>
 </html>

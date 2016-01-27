@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Signup</title>
+</head>
+<body>
+    <h1>Signup</h1>
+    {{error}}
+    <form action="" method = "post">
+        {% csrf_token %}
+        <input type="text" name = "username">
+        <input type="password" name = "password">
+        <input type="submit" value = "Signup">
+    </form>
+    <br/><br/>
+    <a href = "/accounts/login">Login</a>
+</body>
+</html>

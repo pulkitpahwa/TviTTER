@@ -1,0 +1,47 @@
+call initialised
+set following parameters : 
+    api_version
+    api_url
+    app_key
+    app_Secret
+    oauth_token
+    oauth_token_secret
+    access_token
+    
+    request_token_url = api_url % "oauth/request_token"
+    access_token_url = api_url % "oauth/access_token"
+    authenticate_url = api_url % "oauth/" + auth_endpoint
+    
+
+if acccess_token is provided : 
+    oauth = 2
+else :  
+    oauth = 1 
+    
+    This is because oauth2 requires authentication via access_token while oauth1 uses oauth_token and oauth_token_secret
+    
+client_args = client_args or {}  # if client_args is passed to init, then client_args = client_args, else {}
+
+default_headers = {"User-Agent" : "Your app name or anything"} 
+
+if headers not in client_args:
+    client_args["headers"]  = default_headers
+    
+if "User-Agent"  not in client_args["headers"] :
+    update client_args["headers"]. Set it to default_headers
+    
+
+now authentication takes place
+
+if oauth1 : 
+    if app_key is not NONE and app_secret is not None : 
+        auth = OAuth1(app_key, app_secret, oauth_token, oauth_token_secret)
+    
+else : 
+    tokens = {"token_type" : token_type, "access_token" : access_token}
+    auth = OAuth2(app_key, token = tokens)    
+     
+client = requests.Session()
+client.auth = auth #we have already authorized the user. Now set the authentication of client to auth
+     
+    
