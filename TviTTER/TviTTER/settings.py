@@ -35,7 +35,7 @@ except :
     APP_KEY = ""
     APP_SECRET = ""
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
