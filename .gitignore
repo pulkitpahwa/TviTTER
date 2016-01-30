@@ -1,6 +1,5 @@
 app_key.py
-*.py~
-*.html~
+*.*~
 *.swp
 *.pyc
 

@@ -25,7 +25,7 @@ PROJECT_DIR = os.path.dirname(SETTINGS_DIR).decode('utf-8')
 SECRET_KEY = 'k=+)@sd%cmvyt*d7-50(guppa4nbrf48tfe9!2ln9@0gzj#i9a'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 #APP_KEY = "vUmkZ3x2jUNR33ptpeiPCVJa2"
 #APP_SECRET = "U2i0Ah0sXyBVw2jeGpTqg3faPC9Co0uSnUOiwSmQ4Z9l8j56na"
