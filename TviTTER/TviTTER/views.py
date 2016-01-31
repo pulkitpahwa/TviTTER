@@ -1,6 +1,7 @@
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render_to_response
 from django.template import RequestContext
+from django.core.urlresolvers import reverse 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
@@ -136,83 +137,83 @@ def upload_video(media, media_type, size=None, api_url = None, client = None):
     return update_request(upload_url,api_url = api_url, client = client, params=params)
 
 
+def client_authenticate(request, tokens = None, endpoint = None):
+    if tokens : 
+        OAUTH_TOKEN =  tokens["oauth_token"]
+        OAUTH_TOKEN_SECRET = tokens["oauth_token_secret"]   
+    else:
+        OAUTH_TOKEN = request.session.get('OAUTH_TOKEN')
+        OAUTH_TOKEN_SECRET = request.session.get('OAUTH_TOKEN_SECRET')  
+    if endpoint == "authenticate" :       
+        auth = OAuth1(APP_KEY, APP_SECRET)
+    else :
+        auth = OAuth1(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
+    client = requests.Session()
+    client.auth = auth
+    return client
 
 @login_required
 def home(request):
-    try : 
-        message = request.GET['message']
-    except :
-        message = ""
+    message = request.GET.get('message', "")
     return render_to_response("index.html",{"message":message}, context_instance = RequestContext(request))
 
 @login_required
 def authenticate_user(request):
-    auth = OAuth1(APP_KEY, APP_SECRET)
-    client = requests.Session()
-    client.auth = auth
-    api_url = "https://api.twitter.com/%s"
+    client = client_authenticate(request,tokens = None, endpoint = "authenticate")
+    
     request_token_url = api_url % "oauth/request_token"
     response = client.get(request_token_url, params={})
     request_tokens = dict(parse_qsl(response.content.decode("utf-8")))
-
+    print "response = ", response
+    print "request_tokens = ",request_tokens
     authenticate_url = api_url % ("oauth/%s" % "authenticate")
     request_tokens["auth_url"] = authenticate_url + "?" + urlencode({"oauth_token" : request_tokens["oauth_token"]})
-    OAUTH_TOKEN = request_tokens['oauth_token']
-    OAUTH_TOKEN_SECRET = request_tokens['oauth_token_secret']
-    request.session['OAUTH_TOKEN'] = OAUTH_TOKEN
-    request.session['OAUTH_TOKEN_SECRET'] = OAUTH_TOKEN_SECRET
+    request.session['OAUTH_TOKEN'] = request_tokens['oauth_token']
+    request.session['OAUTH_TOKEN_SECRET'] = request_tokens['oauth_token_secret']
 
     return HttpResponseRedirect(request_tokens['auth_url'])
 
 @login_required
 def media_upload(request):
     if request.method == "GET" : 
-        oauth_verifier = request.GET['oauth_verifier']
+        oauth_verifier = request.GET.get('oauth_verifier')
         request.session['oauth_verifier'] = oauth_verifier
         return render_to_response("form.html",{}, context_instance = RequestContext(request))
         
     elif request.method == "POST" : 
-        status = request.POST['tweet']
-        OAUTH_TOKEN = request.session['OAUTH_TOKEN']
-        OAUTH_TOKEN_SECRET = request.session['OAUTH_TOKEN_SECRET']
- 
-        user_auth = OAuth1(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
-        client = requests.Session()
-        client.auth = user_auth
-        oauth_verifier = request.session['oauth_verifier']
+        status = request.POST.get('tweet')
+        client = client_authenticate(request)        
+        oauth_verifier = request.session.get('oauth_verifier')
+        
         try : 
             access_token_url = api_url % "oauth/access_token"        
             response = client.get(access_token_url,
                        params={"oauth_verifier": oauth_verifier},
                        headers={"Content-Type": "application/json"})
+            #change this line
             authorized_tokens = dict(parse_qsl(response.content.decode("utf-8")))
             print authorized_tokens
         except : 
             return HttpResponse("Unable to authenticate you. Please try again")
-        OAUTH_TOKEN =  authorized_tokens["oauth_token"]
-        OAUTH_TOKEN_SECRET = authorized_tokens["oauth_token_secret"]
 
-        authorized_user = OAuth1(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
-        client = requests.Session()
-        client.auth = authorized_user
+        client = client_authenticate(request, tokens = authorized_tokens )
         video = request.FILES['video_file']
         response = upload_video(media=video, media_type="video/mp4", api_url = api_url, client=client)
         if response[0]  : 
             return render_to_response("error.html", {"error" : response[1]} , context_instance = RequestContext(request))
         else : 
-            update_status(api_url, client,status=request.POST['tweet'], media_ids=response[1]["media_id"])
-        return HttpResponseRedirect('/?message=video uploaded successfully')
+            update_status(api_url, client,status=status, media_ids=response[1]["media_id"])
+        return HttpResponseRedirect(reverse('home')+'?message=video uploaded successfully')
 
 
 def signup(request):
     if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
-
+        username = request.POST.get('username')
+        password = request.POST.get('password')
         try:
             u = User.objects.get(username = username) 
             return render_to_response("signup.html",{'error':"Username already taken"}, context_instance = RequestContext(request))
-        except : 
+        except User.DoesNotExist: 
             u = User.objects.create_user(username = username)
             u.set_password(password)
             u.is_staff = True
@@ -221,24 +222,21 @@ def signup(request):
             u = authenticate(username=username, password = password)
             u.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, u)
-            return HttpResponseRedirect("/")
+            return HttpResponseRedirect(reverse('home'))
     else:
         return render_to_response("signup.html",{}, context_instance = RequestContext(request))
 
 
 def user_login(request):
     context = RequestContext(request)
-    try :
-        title = request.GET['msg']
-    except : 
-        title = ""
+    title = request.GET.get('msg')
     if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
+        username = request.POST.get('username')
+        password = request.POST.get('password')
         user = authenticate(username=username, password=password)
         if user is not None and user.is_active:
             login(request, user)
-            return HttpResponseRedirect("/")
+            return HttpResponseRedirect(reverse('home'))
         else:
             return render_to_response("login.html",{'error':"Username and password do not match", "title" : title},context_instance = context)
     else:
@@ -248,7 +246,7 @@ def user_login(request):
 @login_required
 def user_logout(request):
     logout(request)
-    return HttpResponseRedirect('/accounts/login/?msg=successfully registered')
+    return HttpResponseRedirect(reverse('login')+ '?msg=successfully logged out')
 
     
 
