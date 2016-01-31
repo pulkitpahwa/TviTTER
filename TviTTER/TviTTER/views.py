@@ -140,7 +140,11 @@ def upload_video(media, media_type, size=None, api_url = None, client = None):
 
 @login_required
 def home(request):
-    return render_to_response("index.html",{}, context_instance = RequestContext(request))
+    try : 
+        message = request.GET['message']
+    except :
+        message = ""
+    return render_to_response("index.html",{"message":message}, context_instance = RequestContext(request))
 
 @login_required
 def authenticate_user(request):
@@ -159,13 +163,6 @@ def authenticate_user(request):
     request.session['OAUTH_TOKEN'] = OAUTH_TOKEN
     request.session['OAUTH_TOKEN_SECRET'] = OAUTH_TOKEN_SECRET
 
-#    twitter = TviTTER(APP_KEY, APP_SECRET)
-#    auth = twitter.get_authentication_tokens()
-#    OAUTH_TOKEN = auth['oauth_token']
-#    OAUTH_TOKEN_SECRET = auth['oauth_token_secret']
-#    request.session['OAUTH_TOKEN'] = OAUTH_TOKEN
-#    request.session['OAUTH_TOKEN_SECRET'] = OAUTH_TOKEN_SECRET
-#    return HttpResponseRedirect(auth['auth_url'])
     return HttpResponseRedirect(request_tokens['auth_url'])
 
 @login_required
@@ -205,7 +202,7 @@ def media_upload(request):
             return render_to_response("error.html", {"error" : response[1]} , context_instance = RequestContext(request))
         else : 
             update_status(api_url, client,status="Checkout this cool video!", media_ids=response[1]["media_id"])
-        return HttpResponseRedirect('/')
+        return HttpResponseRedirect('/?message=video uploaded successfully')
 
 
 def signup(request):
