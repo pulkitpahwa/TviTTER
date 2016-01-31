@@ -10,7 +10,6 @@ import json
 import requests
 
 from TviTTER.settings import APP_KEY, APP_SECRET
-#from TviTTER.getting_Started import TviTTER, TviTTERError
 import os
 import requests
 from requests.auth import HTTPBasicAuth
@@ -201,7 +200,7 @@ def media_upload(request):
         if response[0]  : 
             return render_to_response("error.html", {"error" : response[1]} , context_instance = RequestContext(request))
         else : 
-            update_status(api_url, client,status="Checkout this cool video!", media_ids=response[1]["media_id"])
+            update_status(api_url, client,status=request.POST['tweet'], media_ids=response[1]["media_id"])
         return HttpResponseRedirect('/?message=video uploaded successfully')
 
 
